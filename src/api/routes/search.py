@@ -48,14 +48,28 @@ async def search_cache(
         # Search for similar items in similarity service
         metric = SimilarityMetric(request.metric) if request.metric in [m.value for m in SimilarityMetric] else SimilarityMetric.COSINE
         
+        # Phase 4 Intelligence: Adaptive Threshold & Domain Classification
+        domain_classifier = getattr(http_request.app.state, 'domain_classifier', None)
+        threshold_manager = getattr(http_request.app.state, 'adaptive_thresholds', None)
+        
+        domain_str = "general"
+        if domain_classifier:
+            domain_str = domain_classifier.classify(request.query)
+            
+        # Use adaptive threshold unless user explicitly provided one that differs from default (assuming 0.75 default)
+        # For simplicity, if threshold manager exists, we override the default fallback
+        final_threshold = request.threshold
+        if threshold_manager and (request.threshold == 0.75 or request.threshold is None):
+            final_threshold = threshold_manager.get_threshold(domain_str)
+
         search_req = SimilarityReq(
             query_embedding=embedding,
             query_id=f"search_{int(time.time() * 1000)}",
             query_text=request.query,
             metric=metric,
-            threshold=request.threshold,
+            threshold=final_threshold,
             top_k=request.top_k,
-            domain=DomainType.GENERAL
+            domain=DomainType.GENERAL # Enum is used by base, but we apply threshold immediately
         )
         
         search_result = similarity_service.search(search_req)

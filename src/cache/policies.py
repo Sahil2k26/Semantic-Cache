@@ -288,5 +288,17 @@ def create_eviction_policy(policy_name: str, **kwargs) -> EvictionPolicyInterfac
         lru_weight = kwargs.get("lru_weight", 0.6)
         lfu_weight = kwargs.get("lfu_weight", 0.4)
         return AdaptiveEvictionPolicy(lru_weight=lru_weight, lfu_weight=lfu_weight)
+    elif policy_name == "cost_aware":
+        from src.ml.cost_aware_eviction import CostAwareEvictionPolicy
+        # Mapping the ML class to the interface expected by L1Cache
+        class AdaptedCostPolicy(EvictionPolicyInterface):
+            def __init__(self):
+                self.policy = CostAwareEvictionPolicy()
+            def select_victim(self, entries, timestamp):
+                victims = self.policy.evict(entries, 1)
+                return victims[0] if victims else None
+            def update_on_access(self, entry, timestamp): pass
+            def reset(self): pass
+        return AdaptedCostPolicy()
     else:
         raise ValueError(f"Unknown eviction policy: {policy_name}")

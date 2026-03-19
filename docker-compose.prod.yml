@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 4
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=WARNING
+      - REDIS_HOST=redis
+      - DATABASE_URL=postgresql://user:password@postgres/cache_db
+    depends_on:
+      - redis
+      - postgres
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cache_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+
+volumes:
+  redis_data:
+  postgres_data:

@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 import logging
 import sys
@@ -14,6 +15,7 @@ from .config import settings
 from .routes import health, cache, search, admin, tenant
 from .auth.jwt import add_auth_middleware
 from .middleware.error import add_error_handlers
+from .middleware.security import setup_security
 
 # Import Phase 1 cache components
 from src.cache.cache_manager import CacheManager, CacheManagerConfig, CacheStrategy
@@ -49,9 +51,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add GZip compression middleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # Add custom middleware
 add_auth_middleware(app)
 add_error_handlers(app)
+setup_security(app)
 
 # Include routers
 app.include_router(health.router, tags=["Health"])
@@ -101,6 +107,7 @@ async def startup_event():
         
         if manager.initialize():
             app.state.cache_manager = manager
+            manager.start_invalidation_listener()
             logger.info("Cache manager initialized successfully")
         else:
             logger.error("Failed to initialize cache manager")
@@ -142,11 +149,66 @@ async def startup_event():
         logger.error(f"Error initializing similarity search service: {e}")
         app.state.similarity_service = None
 
+    # Initialize advanced policies
+    try:
+        from src.cache.advanced_policies import AdvancedCachingPolicyManager
+        app.state.advanced_policies = AdvancedCachingPolicyManager()
+        logger.info("Advanced caching policies initialized")
+    except Exception as e:
+        logger.error(f"Error initializing advanced policies: {e}")
+        app.state.advanced_policies = None
+
+    # Initialize performance optimizer
+    try:
+        from src.cache.performance_opt import PerformanceOptimizer, CompressionFormat
+        app.state.performance_optimizer = PerformanceOptimizer(compression_format=CompressionFormat.GZIP)
+        logger.info("Performance optimizer initialized")
+    except Exception as e:
+        logger.error(f"Error initializing performance optimizer: {e}")
+        app.state.performance_optimizer = None
+
+    # Initialize tenant manager
+    try:
+        from src.cache.multi_tenancy import TenantManager
+        app.state.tenant_manager = TenantManager()
+        logger.info("Tenant manager initialized")
+    except Exception as e:
+        logger.error(f"Error initializing tenant manager: {e}")
+        app.state.tenant_manager = None
+
+    # Initialize ML Components
+    try:
+        from src.ml.domain_classifier import KeyWordDomainClassifier
+        from src.ml.adaptive_thresholds import AdaptiveThresholdManager
+        app.state.domain_classifier = KeyWordDomainClassifier()
+        app.state.adaptive_thresholds = AdaptiveThresholdManager()
+        
+        # Start Predictive Cache Warmer
+        from src.ml.predictive_warmer import PredictiveCacheWarmer
+        warmer = PredictiveCacheWarmer(app.state.cache_manager)
+        warmer.start()
+        app.state.cache_warmer = warmer
+        
+        logger.info("Phase 4 ML components initialized")
+    except Exception as e:
+        logger.error(f"Error initializing ML components: {e}")
+        app.state.domain_classifier = None
+        app.state.adaptive_thresholds = None
+
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Handle application shutdown."""
     logger.info("Shutting down Semantic Cache API server...")
+    
+    # Stop predictive cache warmer
+    if hasattr(app.state, 'cache_warmer') and app.state.cache_warmer is not None:
+        try:
+            app.state.cache_warmer.stop()
+            logger.info("Cache warmer stopped")
+        except Exception as e:
+            logger.error(f"Error stopping cache warmer: {e}")
     
     # Cleanup cache manager
     if hasattr(app.state, 'cache_manager') and app.state.cache_manager is not None:

@@ -250,6 +250,7 @@ class CacheManager:
             
             if self.l2_cache is not None:
                 l2_ok = self.l2_cache.delete(query_id)
+                self.publish_invalidation(query_id)
             
             return l1_ok and l2_ok
             
@@ -269,6 +270,7 @@ class CacheManager:
             
             if self.l2_cache is not None:
                 l2_ok = self.l2_cache.clear()
+                self.publish_invalidation("__FLUSHALL__")
             
             return l1_ok and l2_ok
             
@@ -417,3 +419,34 @@ class CacheManager:
             
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
+
+    def start_invalidation_listener(self) -> None:
+        """Start a background thread listening for L1 invalidation events."""
+        if self.l2_cache is None or not self.l2_cache.ensure_connected():
+            return
+            
+        import threading
+        
+        def listener():
+            try:
+                pubsub = self.l2_cache._client.pubsub()
+                pubsub.subscribe("semantic_cache_invalidation")
+                logger.info("Started Redis pub/sub listener for cache invalidation")
+                for message in pubsub.listen():
+                    if message["type"] == "message":
+                        key = message["data"].decode("utf-8")
+                        if key == "__FLUSHALL__":
+                            self.l1_cache.clear()
+                        else:
+                            self.l1_cache.delete(key)
+            except Exception as e:
+                logger.error(f"Pub/sub listener failed: {e}")
+                
+        self._listener_thread = threading.Thread(target=listener, daemon=True)
+        self._listener_thread.start()
+        
+    def publish_invalidation(self, query_id: str) -> None:
+        """Publish an invalidation event to other nodes."""
+        if self.l2_cache is not None and self.l2_cache.ensure_connected():
+            self.l2_cache._client.publish("semantic_cache_invalidation", query_id)
+

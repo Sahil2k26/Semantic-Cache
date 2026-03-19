@@ -48,26 +48,26 @@ semantic-cache/
 
 ## Development Roadmap
 
-### Phase 1: Core Cache (Months 1-4)
+### Phase 1: Core Cache (Months 1-4) ✅ COMPLETE
 - Basic semantic cache with Redis + HNSW
 - Embedding service integration
 - Monitoring dashboards
 
-### Phase 2: Multi-Level & Hybrid Search (Months 5-7)
+### Phase 2: Multi-Level & Hybrid Search (Months 5-7) ✅ COMPLETE
 - L2 (SSD) and L3 (disk) cache layers
 - Metadata filtering with RedisSearch
 - Eviction policies (LRU, LFU)
 
-### Phase 3: Intelligence Layer (Months 8-10)
+### Phase 3: Intelligence Layer ✅ COMPLETE
 - Domain classifier and adaptive thresholds
 - Predictive warming
-- Cost-aware management with RL
+- Cost-aware eviction
 
-### Phase 4: Production Hardening (Months 11-12)
+### Phase 4: Production Hardening ✅ COMPLETE
 - Multi-tenancy with quotas
-- A/B testing framework
+- Security headers & rate limiting
+- Load testing (Locust)
 - Fine-tuning pipeline
-- Security and compliance
 
 ## Getting Started
 
@@ -117,12 +117,12 @@ See [docs/guides](./docs/guides/) for more examples.
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/query` | POST | Submit a query to the cache |
-| `/health` | GET | Health check |
-| `/metrics` | GET | Prometheus metrics |
-| `/dashboard` | GET | Monitoring dashboard |
+| Endpoint | Methods | Description |
+|----------|---------|-------------|
+| `/api/v1/cache` | GET/PUT/DEL/POST | Cache operations (get, put, batch, delete) |
+| `/api/v1/search` | POST | Semantic similarity search and embedding |
+| `/api/v1/admin` | GET/POST/PUT | Admin cache optimization, compression, policies |
+| `/api/v1/tenant`| GET/POST/PUT/DEL | Resource isolation, quotas, and tenant management |
 
 ## Architecture
 

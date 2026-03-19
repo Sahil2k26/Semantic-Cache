@@ -6,8 +6,8 @@ pydantic-settings==2.1.0
 
 # Data & Cache
 redis==5.0.0
-faiss-cpu==1.7.4
-hnswlib==0.7.0
+#faiss-cpu
+#hnswlib==0.7.0
 numpy==1.24.3
 scipy==1.11.4
 
@@ -25,6 +25,8 @@ pytorch-lightning==2.1.2
 httpx==0.25.2
 requests==2.31.0
 tenacity==8.2.3
+slowapi>=0.1.9
+locust>=2.20.0
 
 # Database
 sqlalchemy==2.0.23

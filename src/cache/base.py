@@ -26,6 +26,7 @@ class EvictionPolicy(str, Enum):
     FIFO = "fifo"  # First In First Out
     TTL = "ttl"  # Time To Live
     ADAPTIVE = "adaptive"  # Adaptive (combines LRU + LFU)
+    COST_AWARE = "cost_aware"  # Cost-aware eviction based on compute/latency
 
 
 class CacheHitReason(str, Enum):
