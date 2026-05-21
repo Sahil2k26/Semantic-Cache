@@ -534,15 +534,14 @@ class TestEdgeCases:
         # Should succeed but behavior is implementation-defined
         assert success in [True, False]  # Either is acceptable
     
-    def test_missing_embedding_service(self, cache_manager):
+    @pytest.mark.asyncio
+    async def test_missing_embedding_service(self, cache_manager):
         """Test behavior when embedding service is not available."""
         # cache_manager doesn't have embedding service
         # Async operations should fail gracefully
-        result = asyncio.get_event_loop().run_until_complete(
-            cache_manager.get_semantic_async(
-                query_text="Test",
-                tenant_id="tenant-1"
-            )
+        result = await cache_manager.get_semantic_async(
+            query_text="Test",
+            tenant_id="tenant-1"
         )
         # Should return None, not crash
         assert result is None

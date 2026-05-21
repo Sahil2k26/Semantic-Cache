@@ -6,7 +6,7 @@ Defines data validation models for all API endpoints.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ===== Embedding-related schemas =====
@@ -330,9 +330,39 @@ class PaginatedResponse(BaseModel):
     page_size: int = Field(..., ge=1, description="Items per page")
     total_pages: int = Field(..., ge=0, description="Total number of pages")
 
-    @validator("total_pages", always=True)
-    def calculate_total_pages(cls, v, values):
+    @field_validator("total_pages", mode="before")
+    @classmethod
+    def calculate_total_pages(cls, v, info):
         """Calculate total pages from total and page_size."""
-        if "total" in values and "page_size" in values:
-            return (values["total"] + values["page_size"] - 1) // values["page_size"]
+        data = info.data if hasattr(info, "data") else {}
+        if "total" in data and "page_size" in data and data["page_size"] > 0:
+            return (data["total"] + data["page_size"] - 1) // data["page_size"]
         return v
+
+
+# ===== Cache entry schema (used by internal imports) =====
+
+class CacheEntrySchema(BaseModel):
+    """Schema representing a single cached entry — used internally for serialization."""
+
+    query_id: str = Field(..., description="Unique query identifier")
+    query_text: str = Field(..., description="Original query text")
+    response: Optional[Any] = Field(default=None, description="Cached response")
+    domain: str = Field(default="general", description="Domain classification")
+    similarity_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    cache_level: Optional[str] = Field(default=None, description="Cache tier (L1/L2/L3)")
+    created_at: Optional[datetime] = Field(default=None)
+    access_count: int = Field(default=0, ge=0)
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "query_id": "abc123",
+                "query_text": "What is machine learning?",
+                "response": "ML is a subset of AI...",
+                "domain": "general",
+                "similarity_score": 0.92,
+                "cache_level": "L1",
+                "access_count": 5,
+            }
+        }

@@ -1,0 +1,84 @@
+STDOUT:
+============================= test session starts =============================
+collecting ... collected 28 items
+
+tests/unit/test_phase1_1_foundation.py::TestCustomExceptions::test_base_exception PASSED [  3%]
+tests/unit/test_phase1_1_foundation.py::TestCustomExceptions::test_cache_errors PASSED [  7%]
+tests/unit/test_phase1_1_foundation.py::TestCustomExceptions::test_embedding_errors PASSED [ 10%]
+tests/unit/test_phase1_1_foundation.py::TestCustomExceptions::test_configuration_errors PASSED [ 14%]
+tests/unit/test_phase1_1_foundation.py::TestLogging::test_get_logger PASSED [ 17%]
+tests/unit/test_phase1_1_foundation.py::TestLogging::test_logger_context PASSED [ 21%]
+tests/unit/test_phase1_1_foundation.py::TestLogging::test_configure_logging PASSED [ 25%]
+tests/unit/test_phase1_1_foundation.py::TestLogging::test_logger_methods PASSED [ 28%]
+tests/unit/test_phase1_1_foundation.py::TestDataModels::test_tenant_model PASSED [ 32%]
+tests/unit/test_phase1_1_foundation.py::TestDataModels::test_cache_entry_model PASSED [ 35%]
+tests/unit/test_phase1_1_foundation.py::TestPydanticSchemas::test_query_request_validation PASSED [ 39%]
+tests/unit/test_phase1_1_foundation.py::TestPydanticSchemas::test_query_request_validation_fails PASSED [ 42%]
+tests/unit/test_phase1_1_foundation.py::TestPydanticSchemas::test_cache_response_schema PASSED [ 46%]
+tests/unit/test_phase1_1_foundation.py::TestPydanticSchemas::test_cache_stats_schema PASSED [ 50%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_l1_cache_config_validation PASSED [ 53%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_embedding_config_validation PASSED [ 57%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_similarity_config_validation PASSED [ 60%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_full_config_validation PASSED [ 64%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_config_loader_from_yaml PASSED [ 67%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_config_loader_env_override PASSED [ 71%]
+tests/unit/test_phase1_1_foundation.py::TestConfiguration::test_config_to_dict PASSED [ 75%]
+tests/unit/test_phase1_1_foundation.py::TestDatabase::test_database_manager_creation PASSED [ 78%]
+tests/unit/test_phase1_1_foundation.py::TestDatabase::test_database_session_creation PASSED [ 82%]
+tests/unit/test_phase1_1_foundation.py::TestDatabase::test_database_context_manager PASSED [ 85%]
+tests/unit/test_phase1_1_foundation.py::TestIntegration::test_config_and_logging_integration PASSED [ 89%]
+tests/unit/test_phase1_1_foundation.py::TestIntegration::test_full_initialization_flow PASSED [ 92%]
+tests/test_multi_intent.py::test_query_normalizer PASSED                 [ 96%]
+tests/test_multi_intent.py::test_rule_based_intent_detector PASSED       [100%]
+
+============================== warnings summary ===============================
+src\core\models.py:25
+  C:\Coding\Project Btech\Semantic-Cache\src\core\models.py:25: MovedIn20Warning: The ``declarative_base()`` function is now available as sqlalchemy.orm.declarative_base(). (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+    Base = declarative_base()
+
+src\core\schemas.py:14
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:14: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class EmbeddingVector(BaseModel):
+
+src\core\schemas.py:34
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:34: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class QueryRequest(BaseModel):
+
+src\core\schemas.py:67
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:67: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CacheResponse(BaseModel):
+
+src\core\schemas.py:117
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:117: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CacheStats(BaseModel):
+
+src\core\schemas.py:167
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:167: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class HealthCheckResponse(BaseModel):
+
+src\core\schemas.py:209
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:209: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class ErrorResponse(BaseModel):
+
+src\core\schemas.py:256
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:256: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class TenantInfo(BaseModel):
+
+src\core\schemas.py:303
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:303: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class DomainClassificationResult(BaseModel):
+
+src\core\schemas.py:345
+  C:\Coding\Project Btech\Semantic-Cache\src\core\schemas.py:345: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CacheEntrySchema(BaseModel):
+
+tests/unit/test_phase1_1_foundation.py: 69 warnings
+  C:\Coding\Project Btech\Semantic-Cache\src\utils\logging.py:27: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    "timestamp": datetime.utcnow().isoformat(),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 28 passed, 79 warnings in 0.80s =======================
+
+STDERR:
+
+RETURN CODE: 0

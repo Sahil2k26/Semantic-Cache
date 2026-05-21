@@ -1,0 +1,43 @@
+=== SEMANTIC CACHE DIAGNOSTIC REPORT ===
+
+[OK]  core.config
+[OK]  core.circuit_breaker
+[OK]  core.exceptions
+[OK]  core.models
+[OK]  core.schemas
+[OK]  core.database
+[OK]  cache.base
+[OK]  cache.l1_cache
+[OK]  cache.l2_cache
+[OK]  cache.l3_cache
+[OK]  cache.redis_config
+[OK]  cache.index_manager
+[OK]  cache.streaming
+[OK]  cache.context
+[OK]  cache.cache_manager
+[OK]  embedding.base
+[OK]  embedding.service
+[OK]  similarity.base
+[OK]  similarity.service
+[OK]  ml.query_parser
+[OK]  ml.domain_classifier
+[OK]  ml.adaptive_thresholds
+[OK]  monitoring.analytics
+[OK]  api.config
+[OK]  api.auth.jwt
+[OK]  api.middleware.error
+[OK]  api.middleware.security
+[OK]  api.schemas
+[OK]  api.routes.health
+[OK]  api.routes.admin
+[OK]  api.routes.tenant
+[OK]  api.routes.search
+[OK]  api.routes.analytics
+[OK]  api.routes.cache
+[OK]  api.main
+
+
+============================================================
+RESULT: 35/35 passed, 0 errors
+============================================================
+

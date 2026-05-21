@@ -362,79 +362,73 @@
 │  │ OPTIMIZATION: Different domains need different precision levels           │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 │                                     │                                            │
-│                                     ▼                                            │
-│  ┌───────────────────────────────────────────────────────────────────────────┐  │
-│  │ 2. ADAPTIVE THRESHOLDS (src/ml/adaptive_thresholds.py)                    │  │
-│  │                                                                            │  │
-│  │ PURPOSE: Set optimal similarity threshold per domain                      │  │
-│  │                                                                            │  │
-│  │ ┌────────────────────────────────────────────────────────────────────┐    │  │
-│  │ │  class AdaptiveThresholdManager:                                   │    │  │
-│  │ │      domain_thresholds = {                                         │    │  │
-│  │ │          "coding":     0.85,  # High precision for code            │    │  │
-│  │ │          "finance":    0.85,  # High precision for money           │    │  │
-│  │ │          "healthcare": 0.80,  # Moderate precision                 │    │  │
-│  │ │          "legal":      0.90,  # VERY high - legal advice critical  │    │  │
-│  │ │          "general":    0.70,  # Looser for general queries         │    │  │
-│  │ │      }                                                             │    │  │
-│  │ └────────────────────────────────────────────────────────────────────┘    │  │
-│  │                                                                            │  │
-│  │ WHY DIFFERENT THRESHOLDS?                                                 │  │
-│  │                                                                            │  │
-│  │   ┌──────────────────────────────────────────────────────────────────┐    │  │
-│  │   │  LEGAL DOMAIN (threshold=0.90)                                   │    │  │
-│  │   │                                                                   │    │  │
-│  │   │  Query: "Can I sue my employer for wrongful termination?"        │    │  │
-│  │   │  Cached: "Can I sue my landlord for wrongful eviction?"          │    │  │
-│  │   │  Similarity: 0.87                                                │    │  │
-│  │   │                                                                   │    │  │
-│  │   │  Result: REJECTED (0.87 < 0.90)                                  │    │  │
-│  │   │  Reason: Legal advice must be precise - different legal areas   │    │  │
-│  │   └──────────────────────────────────────────────────────────────────┘    │  │
-│  │                                                                            │  │
-│  │   ┌──────────────────────────────────────────────────────────────────┐    │  │
-│  │   │  GENERAL DOMAIN (threshold=0.70)                                 │    │  │
-│  │   │                                                                   │    │  │
-│  │   │  Query: "What's a good restaurant nearby?"                       │    │  │
-│  │   │  Cached: "Recommend a restaurant close to me"                    │    │  │
-│  │   │  Similarity: 0.75                                                │    │  │
-│  │   │                                                                   │    │  │
-│  │   │  Result: ACCEPTED (0.75 >= 0.70)                                 │    │  │
-│  │   │  Reason: General queries can be more flexible                   │    │  │
-│  │   └──────────────────────────────────────────────────────────────────┘    │  │
-│  │                                                                            │  │
-│  │ OPTIMIZATION: Balances precision vs cache hit rate per domain             │  │
-│  └───────────────────────────────────────────────────────────────────────────┘  │
+│              ## 5. Cache Miss Flow (Write Path)
+
+### When Query Has No Match (Integrated LLM Fallback)
+
+In Phase 9, the semantic cache integrates an automated LLM fallback. When a request misses the cache, the API router automatically queries the modular LLM service, stores the newly generated response asynchronously in the tiered cache, and returns it to the client.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     INTEGRATED LLM FALLBACK CACHE MISS FLOW                      │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  Query: "Explain quantum entanglement simply"                                   │
+│  Search Result: No match above threshold in L1/L2/L3                            │
 │                                                                                  │
 │  ┌───────────────────────────────────────────────────────────────────────────┐  │
-│  │ 3. COST-AWARE EVICTION (src/cache/advanced_policies.py)                   │  │
+│  │ STEP 1: CACHE MISS DETECTED BY ROUTER                                     │  │
 │  │                                                                            │  │
-│  │ PURPOSE: Keep high-value items in cache, evict low-value items            │  │
+│  │ Router (src/api/routes/cache.py) intercepts the None cache result.         │  │
+│  │ Instead of raising a 404, it invokes the built-in LLMService.              │  │
+│  └───────┬───────────────────────────────────────────────────────────────────┘  │
+│          │                                                                       │
+│          ▼                                                                       │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │ STEP 2: AUTOMATIC SERVICE LLM CALL (Gemini / OpenAI)                      │  │
 │  │                                                                            │  │
-│  │ ┌────────────────────────────────────────────────────────────────────┐    │  │
-│  │ │  COST METRICS:                                                     │    │  │
-│  │ │                                                                    │    │  │
-│  │ │  class CostMetric(Enum):                                          │    │  │
-│  │ │      LATENCY     # Response time to generate (high = keep)        │    │  │
-│  │ │      COMPUTATION # CPU cost to generate (high = keep)             │    │  │
-│  │ │      MEMORY      # Storage footprint (high = consider evict)      │    │  │
-│  │ │      POPULARITY  # Access frequency (high = keep)                 │    │  │
-│  │ │      RECENCY     # Time since last access (recent = keep)         │    │  │
-│  │ │                                                                    │    │  │
-│  │ │  EVICTION DECISION:                                               │    │  │
-│  │ │  value_score = (latency_cost × popularity) / memory_footprint     │    │  │
-│  │ │  evict = item with lowest value_score                             │    │  │
-│  │ └────────────────────────────────────────────────────────────────────┘    │  │
+│  │ response = await llm_service.generate_async(                              │  │
+│  │     prompt=query_text,                                                    │  │
+│  │     provider=config.LLM_PROVIDER  # "gemini"                              │  │
+│  │ )                                                                         │  │
 │  │                                                                            │  │
-│  │ EXAMPLE:                                                                   │  │
-│  │   Item A: 500ms latency, 100 hits, 1KB → value = (500×100)/1 = 50000     │  │
-│  │   Item B: 100ms latency, 10 hits, 5KB  → value = (100×10)/5 = 200        │  │
-│  │   → Evict Item B (lower value per byte)                                   │  │
+│  │ response_text = "Quantum entanglement is when two particles..."          │  │
+│  └───────┬───────────────────────────────────────────────────────────────────┘  │
+│          │                                                                       │
+│          ▼                                                                       │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │ STEP 3: ASYNCHRONOUS BACKEND STORAGE (put_semantic_async)                 │  │
 │  │                                                                            │  │
-│  │ OPTIMIZATION: Maximizes cost savings by keeping expensive-to-generate     │  │
-│  │               items that are frequently accessed                          │  │
+│  │ Router triggers an asyncio.create_task() for cache storage:               │  │
+│  │ cache_manager.put_semantic_async(                                         │  │
+│  │     query_text="Explain quantum entanglement simply",                     │  │
+│  │     response=response_text,                                               │  │
+│  │     domain="general",                                                     │  │
+│  │     metadata={"model": "gemini-pro", "generation_latency_ms": 780}        │  │
+│  │ )                                                                         │  │
+│  └───────┬───────────────────────────────────────────────────────────────────┘  │
+│          │                                                                       │
+│          ▼                                                                       │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │ STEP 4: WRITE-THROUGH & GRAPH INDEXING                                    │  │
+│  │                                                                            │  │
+│  │ 1. Creates unique f"{tenant_id}:{query_hash}" cache key                   │  │
+│  │ 2. Writes CacheEntry to L1 (Memory)                                       │  │
+│  │ 3. Writes CacheEntry to L2 (Redis)                                        │  │
+│  │ 4. Writes CacheEntry to L3 (PostgreSQL)                                   │  │
+│  │ 5. Indexes the query_text & embedding into HNSW Index                     │  │
 │  └───────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                  │
+│  RESULT: Response returned to client immediately with hit=False &                │
+│          hit_reason="miss_llm_generated". Entry is now cached for future queries.│
+│                                                                                  │
+│  Next query: "Can you explain quantum entanglement in simple terms?"            │
+│  → Embedding similarity: 0.94 with cached entry                                 │
+│  → CACHE HIT! Returns in <1ms instead of 780ms                                  │
+│  → Cost savings: ~100% saved                                                    │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```                                                  │
 │  ┌───────────────────────────────────────────────────────────────────────────┐  │
 │  │ 4. PREDICTIVE CACHE WARMER (src/ml/predictive_warmer.py)                  │  │
 │  │                                                                            │  │

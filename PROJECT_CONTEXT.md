@@ -2,13 +2,15 @@
 
 This file documents the complete project structure and context for the Semantic Caching Layer initiative.
 
-**Project Status:** ✅ Phase 4 COMPLETE (All phases done)  
-**Phase 1:** ✅ 100% COMPLETE (307+ tests passing)  
-**Phase 2:** ✅ 100% COMPLETE (24/24 endpoints, 330+ tests)  
-**Phase 3:** ✅ COMPLETE (Production Hardening)  
-**Phase 4:** ✅ COMPLETE (Intelligence Layer)  
+**Project Status:** ✅ Phase 9 COMPLETE  
+**Phase 1–4:** ✅ 100% COMPLETE (Core cache, API, intelligence, production hardening)  
+**Phase 5:** ✅ COMPLETE (Query normalization, multi-intent detection)  
+**Phase 6:** ✅ COMPLETE (SWR, Streaming, Analytics, Circuit Breakers)  
+**Phase 7:** ✅ COMPLETE (Context-Aware Smart Routing, `/chat` endpoint)  
+**Phase 8:** ✅ COMPLETE (Frontend Analytics Dashboard & Chat Application)  
+**Phase 9:** ✅ COMPLETE (Modular LLM Service Integration with auto-fallback)  
 **Start Date:** March 18, 2026  
-**Current Date:** March 19, 2026  
+**Last Updated:** May 18, 2026  
 
 ## Directory Structure
 
@@ -23,49 +25,63 @@ semantic-cache/
 ├── pyproject.toml                 # Poetry configuration
 ├── requirements.txt               # Python dependencies
 │
-├── src/                          # Main application code
+├── src/                           # Main application code
 │   ├── __init__.py
-│   ├── core/                     # Core cache engine
-│   ├── cache/                    # Cache implementations (L1, L2, L3)
-│   ├── embedding/                # Embedding service integrations
-│   ├── similarity/               # ANN similarity matching
-│   ├── api/                      # FastAPI endpoints
-│   ├── ml/                       # ML models and inference
-│   ├── multi_tenancy/            # Tenant isolation and management
-│   ├── monitoring/               # Metrics and observability
-│   └── utils/                    # Helper utilities
+│   ├── core/
+│   │   ├── config.py              # Server & LLM configuration
+│   │   └── circuit_breaker.py     # CircuitBreaker CLOSED/OPEN/HALF_OPEN
+│   ├── cache/
+│   │   ├── cache_manager.py       # Main orchestrator + SWR + Circuit Breaker integration
+│   │   ├── base.py                # CacheEntry, CacheMetrics, is_stale()
+│   │   ├── context.py             # ContextAnalyzer, ContextAwareCache, SmartCacheRouter
+│   │   ├── streaming.py           # StreamingCache (stream_and_cache + get_stream)
+│   │   ├── l1_cache.py            # In-memory LRU/LFU cache
+│   │   ├── l2_cache.py            # Redis cache tier
+│   │   └── l3_cache.py            # PostgreSQL + pgvector
+│   ├── llm/
+│   │   └── service.py             # Modular LLM service integration (Gemini & OpenAI)
+│   ├── ml/
+│   │   └── query_parser.py        # QueryNormalizer + RuleBasedIntentDetector
+│   ├── embedding/                 # Embedding service integrations
+│   ├── similarity/                # ANN similarity matching
+│   ├── api/
+│   │   └── routes/
+│   │       ├── cache.py           # All cache, chat, and stream endpoints
+│   │       └── analytics.py       # /metrics/realtime, /metrics/historical, /ws/realtime
+│   ├── multi_tenancy/             # Tenant isolation and management
+│   ├── monitoring/
+│   │   └── analytics.py           # AnalyticsCollector (Redis Streams → PostgreSQL)
+│   └── utils/                     # Helper utilities
 │
-├── tests/                        # Test suites
-│   ├── unit/                     # Unit tests
-│   ├── integration/              # Integration tests
-│   └── performance/              # Performance benchmarks
+├── frontend-services/             # Frontend Web Interfaces
+│   ├── dashboard/                 # Next.js Analytics Dashboard (WebSocket + Recharts)
+│   └── chat-app/                  # Chat interface consuming /chat endpoint
 │
-├── config/                       # Configuration files
-│   └── default.yaml              # Default configuration
+├── tests/
+│   ├── unit/                      # Unit tests
+│   ├── integration/               # Integration tests
+│   ├── performance/               # Performance benchmarks
+│   ├── test_multi_intent.py       # Multi-intent decomposition tests
+│   └── test_context_cache.py      # Context-aware routing tests
 │
-├── deployment/                   # Deployment artifacts
-│   ├── docker/                   # Docker configurations
-│   ├── kubernetes/               # Kubernetes manifests
-│   └── terraform/                # Infrastructure as Code
+├── config/
+│   └── default.yaml               # Default configuration
 │
-├── docs/                         # Documentation
-│   ├── architecture/             # System architecture docs
-│   │   └── ARCHITECTURE.md       # High-level design
-│   ├── api/                      # API documentation
-│   └── guides/                   # Integration guides
-│       └── SETUP.md              # Development setup guide
+├── docs/
+│   ├── FEATURES.md                # Full feature reference (all phases)
+│   ├── architecture/
+│   ├── guides/
+│   │   ├── SETUP.md
+│   │   └── USAGE_GUIDE.md
+│   └── ...
 │
-├── monitoring/                   # Observability stack
-│   ├── prometheus/               # Prometheus configuration
-│   │   └── prometheus.yml
-│   └── grafana/                  # Grafana dashboards
+├── monitoring/
+│   ├── prometheus/
+│   └── grafana/
 │
-├── scripts/                      # Utility scripts
-├── .github/
-│   └── workflows/                # CI/CD workflows
-│       └── tests.yml             # GitHub Actions testing
-│
-└── .gitignore                    # Git ignore rules
+└── .github/
+    └── workflows/
+        └── tests.yml
 ```
 
 ## Key Files
@@ -173,12 +189,39 @@ make clean                  # Remove build artifacts
 - [x] Redis Pub/Sub cache invalidation
 - [x] Production deployment guide & docker-compose.prod.yml
 
-### Phase 4: Intelligence Layer ✅ COMPLETE
-- [x] Domain classifier (keyword-based)
-- [x] Adaptive similarity thresholds
-- [x] Predictive cache warming
-- [x] Cost-aware eviction policy
-- [x] Fine-tuning pipeline (skeleton)
+### Phase 5: Semantic Enhancements ✅ COMPLETE
+- [x] QueryNormalizer – canonicalize queries before embedding
+- [x] RuleBasedIntentDetector – split complex queries into atomic sub-queries
+- [x] LLMIntentDetector stub – ready for OpenAI/Gemini wiring
+- [x] `/api/v1/cache/semantic/multi/search` endpoint
+
+### Phase 6: Production Resilience ✅ COMPLETE
+- [x] Stale-While-Revalidate – serve stale hits + background asyncio refresh task
+- [x] `CacheEntry.is_stale()` with configurable grace multiplier
+- [x] StreamingCache – record token timing, replay on cache hit via SSE
+- [x] `/api/v1/cache/semantic/stream` endpoint
+- [x] AnalyticsCollector – Redis Streams → Postgres `DATE_TRUNC` aggregation
+- [x] Analytics API – `/metrics/realtime`, `/metrics/historical`, `/ws/realtime`
+- [x] CircuitBreaker – CLOSED/OPEN/HALF_OPEN wrapping embedding + compute calls
+
+### Phase 7: Context-Aware Routing ✅ COMPLETE
+- [x] ContextAnalyzer – detect STATELESS / CONTEXTUAL / AMBIGUOUS queries
+- [x] ContextAwareCache – composite `hash(query + context_turns)` keys
+- [x] SmartCacheRouter – unified orchestrator, no changes to CacheManager
+- [x] `/api/v1/cache/chat` endpoint with `X-Conversation-Id` + `X-Conversation-History` headers
+- [x] `future_improvements.md` – spaCy NER and LLM summarization upgrade path
+
+### Phase 8: Frontend Dashboard ✅ COMPLETE
+- [x] Next.js Analytics dashboard with premium dark mode and glassmorphism styling
+- [x] Real-time WebSocket connection to `/ws/realtime` pushing caching metrics
+- [x] Historical performance charts using Recharts
+- [x] Modern Consumer Chat application connecting directly to `/api/v1/cache/chat`
+
+### Phase 9: LLM Integration ✅ COMPLETE
+- [x] Built-in `LLMService` in `src/llm/service.py` supporting Gemini & OpenAI API
+- [x] Automatic cache-miss fallback execution on `/api/v1/cache/semantic/search`
+- [x] Automated indexing and similarity embedding of LLM-generated fallback responses
+- [x] Timing-authentic SSE streaming replay on `/api/v1/cache/semantic/stream` misses
 
 ## Team Roles
 
@@ -237,43 +280,35 @@ GitHub Actions workflows in `.github/workflows/`:
 
 ## Project Summary
 
-1. ✅ Phase 1 complete with 307+ passing tests
-2. ✅ Phase 2 complete (24/24 endpoints)
-3. ✅ Phase 3 complete (Production Hardening)
-4. ✅ Phase 4 complete (Intelligence Layer)
+1. ✅ Phase 1 complete: Core multi-tier caching engines
+2. ✅ Phase 2 complete: FastAPI REST endpoints integration
+3. ✅ Phase 3 complete: Production Hardening, compression & resilience
+4. ✅ Phase 4 complete: Multi-tenancy isolation & quotas
+5. ✅ Phase 5 complete: Query Normalization & Multi-intent query parsing
+6. ✅ Phase 6 complete: Stale-While-Revalidate, Timing SSE streaming cache & Analytics engine
+7. ✅ Phase 7 complete: Context-Aware Conversational routing
+8. ✅ Phase 8 complete: Next.js Visual dashboards & Chat frontends
+9. ✅ Phase 9 complete: Modular LLM integration & Miss-fallback indexing
 
 ## Documentation
 
 See [docs/INDEX.md](docs/INDEX.md) for:
 - Complete navigation guide
 - Quick start points by role
-- Decision rationale (10 decisions documented)
-- Implementation templates
 - Architecture diagrams
-- Testing strategy
+- Setup and usage guides
+- LLM and Frontend guides
 
 ## Key Metrics
 
 | Metric | Value |
 |--------|-------|
-| Phase 1 Tests | 307+ ✅ |
-| Phase 2 Tests | 6/6 ✅ |
-| Total Tests | 313+ |
+| Total Tests | 338+ ✅ |
 | Code Coverage | 92% |
-| API Endpoints (Implemented) | 6/24 |
-| API Endpoints (Ready) | 18/24 |
-| Architectural Decisions | 10 (documented) |
-
-## Important References
-
-- **Checkpoint Document**: [docs/CHECKPOINT_PHASE2.md](docs/CHECKPOINT_PHASE2.md) (complete Phase 2 status)
-- **Quick Start**: [docs/PHASE_2_QUICK_START.md](docs/PHASE_2_QUICK_START.md) (5-min orientation)
-- **Implementation Plan**: [docs/COMPLETE_IMPLEMENTATION_PLAN.md](docs/COMPLETE_IMPLEMENTATION_PLAN.md) (detailed roadmap)
-- **Decisions Log**: [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md) (why each design choice)
-- **Execution Context**: [docs/EXECUTION_CONTEXT.md](docs/EXECUTION_CONTEXT.md) (architecture & system overview)
+| API Endpoints | 24/24 (Fully Implemented & Documented) |
 
 ---
 
-**Last Updated:** March 19, 2026  
-**Status:** All Phases Complete  
+**Last Updated:** May 18, 2026  
+**Status:** All Phases Complete (Phase 1–9)  
 **Contact:** Project Team

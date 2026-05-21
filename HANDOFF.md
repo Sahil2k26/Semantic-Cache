@@ -130,3 +130,11 @@ l1_cache.search_similar(embedding, k=5, tenant_id=tenant_id)
 ---
 
 **Full documentation:** See `~/.copilot/session-state/*/plan.md`
+
+
+
+<!-- add body parameter in post : api/v1/cache/{key} -->
+<!-- query normalizer -> need work POST:  -->
+<!-- no. of responses on cache hitting -->
+<!-- POST : api/v1/search  => check if embeding is wrong or this is not working properly -->
+<!-- updated query reach top?  -->

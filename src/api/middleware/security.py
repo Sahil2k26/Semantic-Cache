@@ -8,6 +8,9 @@ from slowapi.errors import RateLimitExceeded
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
+DEFAULT_CSP = "default-src 'self'"
+
+
 async def security_headers_middleware(request: Request, call_next):
     """Add standard security headers to all responses."""
     response = await call_next(request)
@@ -15,7 +18,7 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers.setdefault("Content-Security-Policy", DEFAULT_CSP)
     return response
 
 def setup_security(app: FastAPI):

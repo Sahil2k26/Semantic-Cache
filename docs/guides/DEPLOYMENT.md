@@ -1,39 +1,97 @@
-# Semantic Cache - Production Deployment Guide
+# Production Deployment Guide
 
-This document outlines how to deploy the Semantic Cache layer in a production environment.
+This document outlines standard procedures for deploying the multi-tier semantic cache microservice and its accompanying Next.js visual frontends to production clusters.
 
-## Prerequisites
-- Docker and Docker Compose installed
-- At least 4 CPU cores and 8GB RAM available
-- Python 3.12+ (if deploying natively without Docker)
+---
 
-## Deployment via Docker Compose (Recommended)
-We have provided a `docker-compose.prod.yml` that includes optimized settings for production traffic including Uvicorn workers and Redis memory policies.
+## 🚀 Backend Service Deployment
 
-### Steps
-1. Ensure that `docker-compose` is available on your server.
-2. Spin up the services in detached mode using the production compose file:
-   ```bash
-   docker-compose -f docker-compose.prod.yml up --build -d
-   ```
-3. The API will be available on port 8000. 
+### 1. Containerized Stack (Recommended)
+The fastest path to production is deploying the backend service via the optimized production Docker Compose file:
 
-## Security Hardening
-In production, ensure you update the following environment variables in your `.env` or CI/CD secrets:
-- `JWT_SECRET_KEY`: Set to a strong cryptographically generated secret.
-- `CORS_ORIGINS`: Restrict this to only your frontend or backend microservices (remove `*`).
-- `REDIS_PASSWORD`: Enforce a Redis password for `redis-server` and in the API configuration.
-
-## Performance Optimizations Applied
-The API already leverages Several optimizations across the stack:
-- **Gzip Compression**: `GZipMiddleware` is enabled for API responses larger than 1000 bytes.
-- **Connection Pooling**: Database and Redis limits are pre-configured in `src/api/config.py`.
-- **Redis Pub/Sub**: The L1 cache automatically synchronizes across multi-worker architectures via Redis Pub/Sub events for immediate cache invalidation.
-
-## Load Testing
-For benchmarking your specific infrastructure, use the provided Locust script:
 ```bash
-pip install locust
-locust -f tests/performance/locustfile.py --host=http://<PRODUCTION_URL> --headless -u 100 -r 10
+# Build and run with production settings
+docker-compose -f docker-compose.prod.yml up --build -d
 ```
-Monitor the output metrics to verify that you meet the >1000 requests/sec latency targets.
+
+### 2. Microservice Scale-out (Kubernetes)
+For high-availability clusters, scale out Uvicorn workers and cache nodes horizontally:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: semantic-cache-api
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: api
+        image: semantic-cache-api:latest
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: cache-secrets
+              key: db-url
+        - name: REDIS_HOST
+          value: "redis-cluster.cache.svc.cluster.local"
+```
+
+> [!IMPORTANT]
+> When scaling out behind a Load Balancer, the L1 caches remain synchronized in real-time across instances using built-in Redis Pub/Sub invalidation events (`src/cache/l2_cache.py`).
+
+---
+
+## 🎨 Next.js Frontends Deployment
+
+Deploy the Visual Suite (`dashboard` and `chat-app`) to high-performance cloud providers (Vercel, AWS ECS, or Docker).
+
+### 1. Vercel deployment (Recommended)
+Both applications are standard Next.js apps, allowing seamless deployment to **Vercel**:
+1. Connect your Git repository to Vercel.
+2. Set the **Root Directory** to `frontend-services/dashboard` or `frontend-services/chat-app`.
+3. Set the Environment Variables as listed below.
+4. Click **Deploy**.
+
+### 2. Docker Deployment
+Use multi-stage Dockerfiles inside each frontend folder to build highly compact production images:
+
+```dockerfile
+# Example Next.js production stage
+FROM node:18-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV production
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+---
+
+## ⚙️ Production Environment Checklist
+
+Before deploying, ensure all of the following environment keys are populated:
+
+### Backend Service API
+- `DATABASE_URL` — Production PostgreSQL database string (e.g., AWS RDS or Supabase).
+- `REDIS_HOST` & `REDIS_PORT` — Managed Redis Cache instance (e.g., ElastiCache or Redis Labs).
+- `LLM_PROVIDER` — `"gemini"` or `"openai"`.
+- `LLM_API_KEY` — Production API token with proper billing quotas set.
+
+### Next.js Dashboard
+- `NEXT_PUBLIC_API_URL` — `http://your-production-backend-url`
+- `NEXT_PUBLIC_WS_URL` — `ws://your-production-backend-url/ws/realtime`
+
+### Next.js Chat Client
+- `NEXT_PUBLIC_API_URL` — `http://your-production-backend-url`

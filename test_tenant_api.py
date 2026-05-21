@@ -5,9 +5,9 @@ import requests
 import json
 import time
 
-BASE_URL = "http://localhost:8002"
+BASE_URL = "http://localhost:8001"
 TEST_ADMIN_ID = "test_admin_123"
-TEST_TENANT_ID = "tenant_001"
+TEST_TENANT_ID = f"tenant_{int(time.time())}"
 
 def get_auth_token(user_id: str = TEST_ADMIN_ID, tenant_id: str = TEST_TENANT_ID, role: str = "superadmin") -> str:
     response = requests.get(
@@ -18,7 +18,7 @@ def get_auth_token(user_id: str = TEST_ADMIN_ID, tenant_id: str = TEST_TENANT_ID
 
 def test_create_tenant(token: str) -> bool:
     payload = {
-        "tenant_id": "new_tenant_999",
+        "tenant_id": TEST_TENANT_ID,
         "quota_memory_mb": 500,
         "quota_queries_daily": 10000,
         "quota_request_size_kb": 250

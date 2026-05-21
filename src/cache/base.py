@@ -79,9 +79,10 @@ class CacheEntry:
     metadata: Dict[str, Any] = field(default_factory=dict)
     domain: str = "general"  # Domain classification
     
-    # Timing
+    # Timing and Refresh
     created_at: float = field(default_factory=time.time)  # Unix timestamp
     last_accessed_at: float = field(default_factory=time.time)  # Unix timestamp
+    is_refreshing: bool = False  # Lock to prevent thundering herd during SWR
     
     # Access tracking
     access_count: int = 0  # Number of times accessed (for LFU)
@@ -95,6 +96,14 @@ class CacheEntry:
             return False
         age = time.time() - self.created_at
         return age > ttl_seconds
+        
+    def is_stale(self, ttl_seconds: Optional[int], grace_multiplier: float = 2.0) -> bool:
+        """Check if entry is expired but within the stale grace period."""
+        if ttl_seconds is None:
+            return False
+        age = time.time() - self.created_at
+        # It's stale if it's past the TTL, but not past the grace period (e.g. 2 * TTL)
+        return age > ttl_seconds and age <= (ttl_seconds * grace_multiplier)
     
     def record_access(self) -> None:
         """Record that entry was accessed."""

@@ -498,86 +498,62 @@ def query_with_cache(index, query: str):
     return response
 ```
 
-### OpenAI Direct Integration
+### Phase 6-9 Advanced Caching Capabilities
 
+The semantic cache supports the following production-grade capabilities:
+
+#### 1. Context-Aware Smart Conversational Routing (`/api/v1/cache/chat`)
+State-free semantic caches fail on pronoun-rich queries (e.g., *"What did he direct?"*). Our smart router:
+- Analyzes incoming queries via `ContextAnalyzer`.
+- Classifies queries into `STATELESS`, `CONTEXTUAL`, or `AMBIGUOUS`.
+- Blends query vectors with conversation history headers (`X-Conversation-History`) for `CONTEXTUAL` queries, creating isolated, pronoun-resolved similarity cache index keys per session.
+
+**Code Example:**
 ```python
-import openai
 import httpx
 
-class CachedOpenAI:
-    """OpenAI client with semantic caching."""
-    
-    def __init__(self, cache_url: str, openai_api_key: str):
-        self.cache_url = cache_url
-        openai.api_key = openai_api_key
-    
-    async def chat_completion(
-        self,
-        messages: list,
-        model: str = "gpt-4",
-        threshold: float = 0.85
-    ) -> dict:
-        # Extract query from messages
-        query = messages[-1]["content"] if messages else ""
-        
-        # Check cache
-        async with httpx.AsyncClient() as client:
-            cache_response = await client.post(
-                f"{self.cache_url}/api/v1/cache/semantic/search",
-                json={"query": query, "threshold": threshold}
-            )
-            
-            if cache_response.status_code == 200:
-                data = cache_response.json()
-                if data.get("hit"):
-                    return {
-                        "content": data["response"],
-                        "cached": True,
-                        "similarity": data["similarity"],
-                        "cost": 0  # No API cost!
-                    }
-        
-        # Cache miss - call OpenAI
-        response = openai.ChatCompletion.create(
-            model=model,
-            messages=messages
-        )
-        
-        content = response.choices[0].message.content
-        cost = response.usage.total_tokens * 0.00003  # Approximate
-        
-        # Cache the response
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{self.cache_url}/api/v1/cache/semantic",
-                json={
-                    "query": query,
-                    "response": content,
-                    "metadata": {
-                        "model": model,
-                        "cost": cost,
-                        "tokens": response.usage.total_tokens
-                    }
-                }
-            )
-        
-        return {
-            "content": content,
-            "cached": False,
-            "cost": cost
-        }
-
-# Usage
-cached_client = CachedOpenAI("http://localhost:8000", "sk-...")
-
-result = await cached_client.chat_completion([
-    {"role": "user", "content": "What is quantum computing?"}
-])
-
-print(f"Response: {result['content']}")
-print(f"Cached: {result['cached']}")
-print(f"Cost: ${result['cost']:.4f}")
+# Query with historical turns
+response = httpx.post(
+    "http://localhost:8000/api/v1/cache/chat",
+    headers={
+        "X-Conversation-Id": "conversation-uuid-505",
+        "X-Conversation-History": '[{"role":"user","content":"Tell me about Christopher Nolan"},{"role":"assistant","content":"He is a famous director..."}]'
+    },
+    json={"query": "What was his first movie?"}
+)
+print(response.json())
 ```
+
+#### 2. SSE timing-Authentic Streaming Cache (`/api/v1/cache/semantic/stream`)
+Standard caches wait for streams to complete, returning flat text. Our streaming cache:
+- Captures first-time chunk timings dynamically when streaming from backing LLMs.
+- Saves the timing signature alongside the content chunks in PostgreSQL and Redis.
+- Simulates exact, timing-authentic chunk streaming replay on hits, preserving LLM user experiences.
+
+**Code Example:**
+```python
+import httpx
+
+# Query timing-authentic SSE streaming
+with httpx.stream(
+    "POST",
+    "http://localhost:8000/api/v1/cache/semantic/stream",
+    json={"query": "Explain quantum entanglement in 3 sentences."}
+) as r:
+    for chunk in r.iter_raw():
+        print(chunk.decode("utf-8"), end="", flush=True)
+```
+
+#### 3. Stale-While-Revalidate (SWR) Engine
+Keeps data ultra-fast while ensuring freshness in background:
+- If a cache entry is hit but its age exceeds the configured `swr_fresh_ttl`, the cached value is returned to the user immediately (`<2ms`).
+- An asynchronous background validation task is spawned to query the backing LLM, update the L1/L2/L3 tiers, and rebuild the similarity index with the freshest response.
+
+#### 4. Automatic LLM Fallback on Cache Miss
+Removes the need for client-side fallback orchestration:
+- On a cache lookup miss, the API automatically triggers a call to `LLMService` (which abstracts Gemini-pro REST integrations).
+- Returns the generated response immediately to the client with `{"hit": false, "hit_reason": "miss_llm_generated"}`.
+- Triggers a write-through promotion task (`put_semantic_async`) in the background, writing to L1 Memory, L2 Redis, L3 Postgres, and HNSW indexes concurrently.
 
 ---
 

@@ -65,7 +65,7 @@ def test_cache_put(token: str) -> bool:
     
     response = requests.put(
         f"{BASE_URL}/api/v1/cache/{test_key}",
-        json=test_value,
+        json={"value": test_value},
         headers=headers
     )
     
@@ -131,7 +131,7 @@ def test_cache_batch(token: str) -> bool:
         
         requests.put(
             f"{BASE_URL}/api/v1/cache/{test_key}",
-            json=test_value,
+            json={"value": test_value},
             headers=headers
         )
     

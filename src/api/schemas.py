@@ -66,7 +66,7 @@ class CachePutResponse(BaseModel):
 
 class CacheBatchRequest(BaseModel):
     """Request for batch cache operations."""
-    keys: List[str] = Field(..., min_items=1, max_items=100)
+    keys: List[str] = Field(..., min_length=1, max_length=100)
 
     class Config:
         json_schema_extra = {

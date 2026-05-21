@@ -19,13 +19,17 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Callable, Awaitable
+from typing import Any, Dict, List, Optional, Tuple, Callable, Awaitable, TYPE_CHECKING
 
 from src.cache.base import CacheEntry, CacheHitReason, CacheConfig
 from src.cache.l1_cache import L1Cache
 from src.cache.l2_cache import L2Cache, L2CacheMetrics
 from src.cache.l3_cache import L3Cache, L3CacheMetrics
 from src.cache.redis_config import RedisConfig
+from src.ml.query_parser import QueryNormalizer, RuleBasedIntentDetector, MultiIntentQuery, SubQuery
+
+if TYPE_CHECKING:
+    from src.cache.index_manager import UnifiedIndexManager
 
 
 logger = logging.getLogger(__name__)
@@ -171,6 +175,12 @@ class CacheManager:
         self._embedding_service = embedding_service
         self._domain_classifier = domain_classifier
         self._threshold_manager = threshold_manager
+        self._query_normalizer = QueryNormalizer()
+        self._intent_detector = RuleBasedIntentDetector()
+        
+        from src.core.circuit_breaker import CircuitBreaker
+        self.embedding_breaker = CircuitBreaker(name="embedding_service", failure_threshold=5, recovery_timeout=30)
+        self.compute_breaker = CircuitBreaker(name="compute_service", failure_threshold=5, recovery_timeout=60)
         
         # Semantic metrics
         self._semantic_metrics = {
@@ -774,13 +784,18 @@ class CacheManager:
             return None
         
         try:
+            # Query normalization
+            normalized_query = self._query_normalizer.normalize(query_text)
+            
             # Generate embedding
-            embedding_record = await self._embedding_service.embed_text(query_text)
+            async def get_emb():
+                return await self._embedding_service.embed_text(normalized_query)
+            embedding_record = await self.embedding_breaker.call(get_emb)
             self._semantic_metrics["embeddings_generated"] += 1
             
             # Search with embedding
             return self.get_semantic(
-                query_text=query_text,
+                query_text=normalized_query,
                 embedding=embedding_record.embedding,
                 tenant_id=tenant_id,
                 domain=domain,
@@ -789,6 +804,77 @@ class CacheManager:
         except Exception as e:
             logger.error(f"Async semantic search failed: {e}")
             return None
+
+    async def get_semantic_multi_async(
+        self,
+        query_text: str,
+        tenant_id: Optional[str] = None,
+        domain: Optional[str] = None,
+        threshold: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Decomposes query into multiple intents and searches for each.
+        Returns a dict of sub_queries matched, syntesised response (if all hit), etc.
+        """
+        # Normalize
+        normalized_query = self._query_normalizer.normalize(query_text)
+        
+        # Decompose
+        multi_intent = self._intent_detector.decompose(normalized_query)
+        
+        results = {
+            "original_query": query_text,
+            "normalized_query": normalized_query,
+            "sub_queries": [],
+            "all_hit": True,
+            "synthesized_response": None,
+            "hit_ratio": 0.0
+        }
+        
+        if len(multi_intent.sub_queries) <= 1:
+            # Fall back to normal search
+            res = await self.get_semantic_async(query_text, tenant_id, domain, threshold)
+            if res and res.entry:
+                results["sub_queries"].append({
+                    "id": multi_intent.sub_queries[0].id if multi_intent.sub_queries else "sq_1",
+                    "text": normalized_query,
+                    "hit": True,
+                    "response": res.entry.response
+                })
+                results["synthesized_response"] = res.entry.response
+                results["hit_ratio"] = 1.0
+            else:
+                results["all_hit"] = False
+            return results
+            
+        hits = 0
+        responses = []
+        for sq in multi_intent.sub_queries:
+            sq_res = await self.get_semantic_async(sq.text, tenant_id, domain, threshold)
+            hit = sq_res is not None and sq_res.entry is not None
+            if hit:
+                hits += 1
+                responses.append(sq_res.entry.response)
+                results["sub_queries"].append({
+                    "id": sq.id,
+                    "text": sq.text,
+                    "hit": True,
+                    "response": sq_res.entry.response
+                })
+            else:
+                results["all_hit"] = False
+                results["sub_queries"].append({
+                    "id": sq.id,
+                    "text": sq.text,
+                    "hit": False,
+                    "response": None
+                })
+                
+        results["hit_ratio"] = hits / len(multi_intent.sub_queries)
+        if results["all_hit"]:
+            results["synthesized_response"] = self._intent_detector.synthesize(normalized_query, [str(r) for r in responses])
+            
+        return results
     
     def put_semantic(
         self,
@@ -887,18 +973,23 @@ class CacheManager:
             return False
         
         try:
+            # Query normalization
+            normalized_query = self._query_normalizer.normalize(query_text)
+
             # Auto-detect domain
             if domain is None and self._domain_classifier:
-                domain = self._domain_classifier.classify(query_text)
+                domain = self._domain_classifier.classify(normalized_query)
             domain = domain or "general"
             
             # Generate embedding
-            embedding_record = await self._embedding_service.embed_text(query_text)
+            async def get_emb():
+                return await self._embedding_service.embed_text(normalized_query)
+            embedding_record = await self.embedding_breaker.call(get_emb)
             self._semantic_metrics["embeddings_generated"] += 1
             
             # Store with embedding
             return self.put_semantic(
-                query_text=query_text,
+                query_text=normalized_query,
                 embedding=embedding_record.embedding,
                 response=response,
                 tenant_id=tenant_id,
@@ -917,6 +1008,8 @@ class CacheManager:
         domain: Optional[str] = None,
         threshold: Optional[float] = None,
         cache_result: bool = True,
+        ttl_seconds: Optional[int] = None,
+        stale_multiplier: float = 2.0,
     ) -> Tuple[Any, bool, float]:
         """
         Get cached response or compute and cache if not found.
@@ -948,19 +1041,55 @@ class CacheManager:
             threshold=threshold,
         )
         
+        import asyncio
+        
         if result and result.entry:
-            # Cache hit
-            logger.info(
-                f"Cache hit: similarity={result.similarity:.3f}, "
-                f"source={result.hit_source}"
-            )
-            return (result.entry.response, True, result.similarity)
+            entry = result.entry
+            
+            # Check SWR thresholds
+            if not entry.is_expired(ttl_seconds):
+                # Fresh Cache hit
+                logger.info(
+                    f"Cache hit: similarity={result.similarity:.3f}, "
+                    f"source={result.hit_source}"
+                )
+                return (entry.response, True, result.similarity)
+            else:
+                if entry.is_stale(ttl_seconds, stale_multiplier):
+                    logger.info("Stale Cache Hit - triggering background refresh")
+                    if not entry.is_refreshing:
+                        entry.is_refreshing = True
+                        
+                        async def background_refresh():
+                            try:
+                                new_response = await compute_fn(query_text)
+                                if cache_result:
+                                    await self.put_semantic_async(
+                                        query_text=query_text,
+                                        response=new_response,
+                                        tenant_id=tenant_id,
+                                        domain=domain,
+                                        metadata={"compute_time_ms": (time.time() - start_time) * 1000},
+                                    )
+                            except Exception as e:
+                                logger.error(f"Background refresh failed: {e}")
+                            finally:
+                                entry.is_refreshing = False
+                                
+                        asyncio.create_task(background_refresh())
+                    
+                    return (entry.response, True, result.similarity)
+                else:
+                    # Too old! Falls through to compute
+                    pass
         
         # Cache miss - compute response
         logger.info("Cache miss, computing response...")
         
         try:
-            response = await compute_fn(query_text)
+            async def run_compute():
+                return await compute_fn(query_text)
+            response = await self.compute_breaker.call(run_compute)
             
             # Cache the result
             if cache_result:

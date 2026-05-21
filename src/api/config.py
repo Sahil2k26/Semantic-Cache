@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     HUGGINGFACE_API_KEY: str = ""
     
+    # LLM Service
+    LLM_PROVIDER: str = "gemini"  # gemini, openai
+    LLM_API_KEY: str = ""
+    LLM_MODEL: str = "gemini-pro"
+    
     # Performance
     CONNECTION_POOL_SIZE: int = 20
     BATCH_SIZE: int = 20

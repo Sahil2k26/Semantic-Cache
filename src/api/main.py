@@ -3,6 +3,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.openapi.docs import (
+    get_redoc_html,
+    get_swagger_ui_html,
+    get_swagger_ui_oauth2_redirect_html,
+)
 from fastapi.responses import JSONResponse
 import logging
 import sys
@@ -31,17 +36,33 @@ from src.embedding.base import EmbeddingProviderType
 from src.similarity.service import SimilaritySearchService
 from src.similarity.base import SimilarityMetric
 
+# Import database initialization (Fix for Gap: Database not initialized at startup)
+from src.core.database import init_database
+from src.core.config import SemanticCacheConfig, DatabaseConfig, LLMConfig
+
+# Import LLM service
+from src.llm.service import LLMService
+
 # Configure logging
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
+
+DOCS_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+    "img-src 'self' data: https://fastapi.tiangolo.com; "
+    "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+    "connect-src 'self'"
+)
 
 # Create FastAPI application
 app = FastAPI(
     title="Semantic Cache API",
     description="FastAPI REST server for distributed semantic caching system",
     version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None,
+    redoc_url=None,
     openapi_url="/openapi.json"
 )
 
@@ -70,6 +91,37 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(tenant.router, prefix="/api/v1/tenant", tags=["Tenant"])
 
 
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui_html():
+    """Serve Swagger UI with a CSP compatible with its assets."""
+    response = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+    )
+    response.headers["Content-Security-Policy"] = DOCS_CSP
+    return response
+
+
+@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
+async def swagger_ui_redirect():
+    """Serve Swagger UI OAuth2 redirect helper with the docs CSP."""
+    response = get_swagger_ui_oauth2_redirect_html()
+    response.headers["Content-Security-Policy"] = DOCS_CSP
+    return response
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    """Serve ReDoc with a CSP compatible with its assets."""
+    response = get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - ReDoc",
+    )
+    response.headers["Content-Security-Policy"] = DOCS_CSP
+    return response
+
+
 @app.on_event("startup")
 async def startup_event():
     """Handle application startup with integrated semantic caching."""
@@ -77,6 +129,25 @@ async def startup_event():
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Log level: {settings.LOG_LEVEL}")
     
+    # Step 0: Initialize Database
+    # ========================================================================
+    try:
+        logger.info("Initializing database...")
+        # Create a config object for the database manager using API settings
+        db_config = DatabaseConfig(
+            url=settings.DATABASE_URL,
+            pool_size=settings.CONNECTION_POOL_SIZE,
+            max_overflow=settings.CONNECTION_POOL_SIZE // 2
+        )
+        core_config = SemanticCacheConfig(database=db_config)
+        db_manager = init_database(core_config)
+        
+        # Create tables if they don't exist
+        db_manager.create_all_tables()
+        logger.info("Database initialized and tables verified")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+
     # ========================================================================
     # Step 1: Initialize Unified Index Manager (Gap #2 Fix)
     # This creates a single HNSW index shared by all components
@@ -242,7 +313,7 @@ async def startup_event():
     # Step 7: Initialize Tenant Manager
     # ========================================================================
     try:
-        from src.cache.multi_tenancy import TenantManager
+        from src.core.tenant_manager import TenantManager
         app.state.tenant_manager = TenantManager()
         logger.info("Tenant manager initialized")
     except Exception as e:
@@ -261,6 +332,23 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error initializing cache warmer: {e}")
         app.state.cache_warmer = None
+        
+    # ========================================================================
+    # Step 9: Initialize LLM Service
+    # ========================================================================
+    try:
+        logger.info("Initializing LLM service...")
+        llm_config = LLMConfig(
+            provider=settings.LLM_PROVIDER,
+            api_key=settings.LLM_API_KEY or None,
+            model=settings.LLM_MODEL,
+        )
+        llm_service = LLMService(llm_config)
+        app.state.llm_service = llm_service
+        logger.info(f"LLM service initialized (provider: {settings.LLM_PROVIDER}, model: {settings.LLM_MODEL})")
+    except Exception as e:
+        logger.error(f"Error initializing LLM service: {e}")
+        app.state.llm_service = None
     
     logger.info("=" * 60)
     logger.info("Semantic Cache API startup complete!")
@@ -269,6 +357,7 @@ async def startup_event():
     logger.info(f"  - Cache Manager:     {'✓' if app.state.cache_manager else '✗'}")
     logger.info(f"  - Domain Classifier: {'✓' if app.state.domain_classifier else '✗'}")
     logger.info(f"  - Similarity Search: {'✓' if app.state.similarity_service else '✗'}")
+    logger.info(f"  - LLM Service:       {'✓' if app.state.llm_service else '✗'}")
     logger.info("=" * 60)
 
 

@@ -5,7 +5,7 @@ import requests
 import json
 import time
 
-BASE_URL = "http://localhost:8002"
+BASE_URL = "http://localhost:8001"
 TEST_USER_ID = "test_admin_123"
 TEST_TENANT_ID = "tenant_001"
 

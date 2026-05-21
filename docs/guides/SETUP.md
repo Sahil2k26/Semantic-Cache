@@ -1,169 +1,131 @@
-# Semantic Cache - Development Setup Guide
+# Local Environment & Services Setup
 
-## Quick Start
+This guide details instructions on setting up your local development environment, configuring backing database and caching services, running tests, and starting backend/frontend applications.
+
+---
+
+## 🚀 Backend Setup
 
 ### 1. Prerequisites
-- Python 3.10+
-- Docker & Docker Compose
-- Git
+- **Python 3.10+** (Required)
+- **Docker & Docker Compose** (Required)
+- **Node.js 18+** (Required for frontend applications)
 
-### 2. Clone & Setup Environment
-
+### 2. Install Dependencies & Virtual Environment
+Clone the repository and initialize your python virtual environment:
 ```bash
-cd semantic-cache
+# Initialize venv
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Activate venv (Windows)
+.\venv\Scripts\activate
+
+# Activate venv (macOS/Linux)
+source venv/bin/activate
+
+# Install core backend dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Start Services
-
+### 3. Docker Infrastructure Setup
+Use Docker Compose to provision PostgreSQL with the `pgvector` extension, Redis warm cache, Prometheus metrics collector, and Grafana visual monitoring.
 ```bash
-# Start Redis, PostgreSQL, Prometheus, Grafana
+# Start infrastructure containers
 docker-compose up -d
 
-# Verify services
+# Verify that all 4 containers are running
 docker-compose ps
 ```
 
-### 4. Run Tests
+---
 
-```bash
-# Install test dependencies
-pip install -e ".[dev]"
+## ⚙️ Environment Configuration
 
-# Run all tests
-pytest tests/
-
-# Run with coverage
-pytest --cov=src tests/
-```
-
-### 5. Start Development Server
-
-```bash
-python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-API will be available at `http://localhost:8000`
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-### 6. Access Monitoring Stack
-
-- **Prometheus:** http://localhost:9090
-- **Grafana:** http://localhost:3000 (admin/admin)
-- **Redis Commander:** (optional, can be added to docker-compose.yml)
-
-## Project Structure
-
-```
-semantic-cache/
-├── src/                    # Main source code
-├── tests/                  # Test suites
-├── config/                 # Configuration files
-├── deployment/             # Deployment artifacts
-├── docs/                   # Documentation
-├── monitoring/             # Monitoring configs
-└── scripts/                # Utility scripts
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root:
+Create a `.env` file in the root workspace folder to enable the modular LLM Service fallback and tiered backends:
 
 ```env
-# API
+# API Server Bind Config
 API_HOST=0.0.0.0
 API_PORT=8000
 API_DEBUG=false
 
-# Redis
+# Redis Warm Cache (L2)
 REDIS_HOST=localhost
 REDIS_PORT=6379
 
-# Database
+# PostgreSQL Cold Store (L3) with pgvector
 DATABASE_URL=postgresql://semantic_cache:semantic_cache_dev@localhost/semantic_cache
 
-# Embedding Model
+# Embedding Model (Sentence Transformers)
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
-# Logging
+# Modular LLM Miss Fallback Configuration (Phase 9)
+LLM_PROVIDER=gemini
+LLM_API_KEY=YOUR_GOOGLE_GENERATIVE_AI_API_KEY
+
+# Logging Level
 LOG_LEVEL=INFO
 ```
 
-### Configuration Files
+---
 
-- **Default config:** `config/default.yaml`
-- **Development:** `config/development.yaml` (create as needed)
-- **Production:** `config/production.yaml` (create as needed)
+## 🖥️ Starting the Services
 
-## Development Workflow
-
-1. **Create a feature branch:**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make changes with tests:**
-   ```bash
-   # Write code in src/
-   # Write tests in tests/
-   ```
-
-3. **Run checks:**
-   ```bash
-   # Format code
-   black src/ tests/
-   
-   # Check linting
-   flake8 src/ tests/
-   
-   # Type checking
-   mypy src/
-   
-   # Run tests
-   pytest tests/
-   ```
-
-4. **Commit and push:**
-   ```bash
-   git add .
-   git commit -m "feat: description of changes"
-   git push origin feature/your-feature-name
-   ```
-
-## Troubleshooting
-
-### Redis Connection Issues
+### 1. Start Backend FastAPI Server
+Once environment variables are configured, spin up the FastAPI ASGI server:
 ```bash
-# Check if Redis is running
-docker-compose ps redis
+python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+- **Interactive OpenAPI (Swagger) Docs:** http://localhost:8000/docs
+- **ReDoc Guides:** http://localhost:8000/redoc
 
-# Test Redis connection
-redis-cli ping  # Should respond with PONG
+### 2. Verify with Unit Tests
+Execute the comprehensive Pytest suite to verify cache mechanics and LLM mocked integration:
+```bash
+# Run backend tests
+pytest tests/ -v
 ```
 
-### PostgreSQL Connection Issues
+---
+
+## 🎨 Frontend Web Applications Setup
+
+The project features a **Web Visual Suite** composed of two Next.js React applications. Make sure you have **Node.js (18+)** installed.
+
+### 1. The Analytics Dashboard (`frontend-services/dashboard`)
+Visualizes Cache hit partitions (L1/L2/L3), token timings, and cost savings in real-time using WebSockets.
+
 ```bash
-# Check if PostgreSQL is running
-docker-compose ps postgres
+# Navigate to directory
+cd frontend-services/dashboard
 
-# Connect to database
-psql -U semantic_cache -h localhost -d semantic_cache
+# Install node dependencies
+npm install
+
+# Start Next.js development server
+npm run dev
 ```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser to inspect hit performance.
 
-### Port Conflicts
-If ports are already in use, modify `docker-compose.yml` or pass different ports:
+### 2. The Consumer Chat Application (`frontend-services/chat-app`)
+A chat client designed to test context-aware session routing (`/chat`) with integrated LLM latency feedback badges.
+
 ```bash
-docker-compose up -d -p custom_project_name
+# Navigate to directory
+cd frontend-services/chat-app
+
+# Install dependencies
+npm install
+
+# Start Next.js server
+npm run dev
 ```
+Open **[http://localhost:3001](http://localhost:3001)** to chat with the system.
 
-## Next Steps
+---
 
-1. Review [Architecture](../docs/architecture/)
-2. Check [API Documentation](../docs/api/)
-3. Run Phase 1 implementation tasks
+## 📈 Monitoring Stack
+
+Once the Docker Compose containers are healthy:
+- **Grafana Metrics Dashboard:** http://localhost:3000 (Credentials: `admin`/`admin`)
+- **Prometheus Collector:** http://localhost:9090
